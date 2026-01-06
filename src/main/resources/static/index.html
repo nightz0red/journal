@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Trading Rule Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-slate-900 text-slate-200 min-h-screen p-4">
+<div class="max-w-7xl mx-auto">
+
+    <h1 class="text-3xl font-bold text-sky-400 mb-6">
+        Trading Rule Engine
+    </h1>
+
+    <!-- ================= FORM ================= -->
+    <div class="bg-slate-800 rounded-xl p-5 mb-6 shadow-lg">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+            <h2 class="text-xl font-semibold">New Trade</h2>
+            <div id="result" class="text-sm"></div>
+        </div>
+
+        <div class="grid md:grid-cols-4 gap-4 mt-4">
+            <input id="pair" class="input" placeholder="Pair (EURUSD)" value="EURUSD">
+            <select id="strategy" class="input">
+                <option value="ORDERFLOW">ORDERFLOW</option>
+                <option value="ASIA_LIQUIDITY">ASIA_LIQUIDITY</option>
+            </select>
+            <input id="status" class="input" placeholder="Status (OPEN/TP/SL/BE)" value="OPEN">
+            <input id="rr" class="input" placeholder="RR (e.g. 2.5)" value="0">
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4 mt-5">
+
+            <div class="card">
+                <h3 class="font-semibold mb-2">Daily Liquidity</h3>
+                <label class="block"><input type="checkbox" id="pdhTaken"> PDH taken</label>
+                <label class="block"><input type="checkbox" id="pdlTaken"> PDL taken</label>
+            </div>
+
+            <div class="card">
+                <h3 class="font-semibold mb-2">HTF Trend</h3>
+                <label class="block"><input type="checkbox" id="weeklyBullish"> Weekly Bullish</label>
+                <label class="block"><input type="checkbox" id="dailyBullish"> Daily Bullish</label>
+                <label class="block"><input type="checkbox" id="h4Bullish"> H4 Bullish</label>
+            </div>
+
+            <div class="card">
+                <h3 class="font-semibold mb-2">Confirmations</h3>
+                <label class="block"><input type="checkbox" id="dailyImbalanceUp"> Daily IMB</label>
+                <label class="block"><input type="checkbox" id="dailyOFUp"> Daily OF</label>
+                <label class="block"><input type="checkbox" id="h4ImbalanceUp"> H4 IMB</label>
+                <label class="block"><input type="checkbox" id="h4OFUp"> H4 OF</label>
+            </div>
+
+            <div class="card">
+                <h3 class="font-semibold mb-2">OrderFlow (15m)</h3>
+                <label class="block"><input type="checkbox" id="h4LiquidityStep1"> Liquidity Step 1</label>
+                <label class="block"><input type="checkbox" id="h4LiquidityStep2"> Liquidity Step 2</label>
+                <label class="block"><input type="checkbox" id="m15Bos"> 15m BOS</label>
+            </div>
+
+            <div class="card">
+                <h3 class="font-semibold mb-2">Asia Model</h3>
+                <label class="block"><input type="checkbox" id="nextDayModel"> Next Day Model</label>
+                <label class="block"><input type="checkbox" id="asiaOFAgainst"> Asia OF Against</label>
+                <label class="block"><input type="checkbox" id="imbalanceAgainst"> IMB Against</label>
+            </div>
+
+            <div class="card">
+                <h3 class="font-semibold mb-2">Actions</h3>
+                <div class="flex gap-3 mt-2">
+                    <button onclick="validateTrade()"
+                            class="px-4 py-2 bg-emerald-500 rounded text-black font-bold w-full">
+                        VALIDATE
+                    </button>
+                    <button id="openBtn" onclick="openTrade()"
+                            class="px-4 py-2 bg-sky-500 rounded font-bold w-full disabled:opacity-40"
+                            disabled>
+                        OPEN
+                    </button>
+                </div>
+                <p class="text-xs text-slate-400 mt-3">
+                    OPEN disabled until trade is ALLOWED.
+                </p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ================= STATS ================= -->
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-slate-800 rounded-xl p-5 shadow-lg">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold">Winrate by Strategy</h2>
+                <button onclick="loadStats()" class="text-sm text-sky-300 hover:text-sky-200">Refresh</button>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Counts only CLOSED trades (TP/SL/BE).</p>
+            <div class="mt-4">
+                <canvas id="winrateChart" height="120"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 rounded-xl p-5 shadow-lg">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold">Rule Failures</h2>
+                <button onclick="loadStats()" class="text-sm text-sky-300 hover:text-sky-200">Refresh</button>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">From blocked_events (blocked on OPEN).</p>
+            <div class="mt-4">
+                <canvas id="ruleChart" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= FILTERS ================= -->
+    <div class="flex gap-4 mb-4 flex-wrap">
+        <select id="filterStrategy" class="input w-64" onchange="loadTrades()">
+            <option value="">All Strategies</option>
+            <option value="ORDERFLOW">ORDERFLOW</option>
+            <option value="ASIA_LIQUIDITY">ASIA_LIQUIDITY</option>
+        </select>
+
+        <select id="filterStatus" class="input w-64" onchange="loadTrades()">
+            <option value="">All Status</option>
+            <option value="OPEN" selected>OPEN</option>
+            <option value="TP">TP</option>
+            <option value="SL">SL</option>
+            <option value="BE">BE</option>
+        </select>
+
+        <button onclick="loadTrades(); loadStats();"
+                class="px-4 py-2 bg-slate-700 rounded font-semibold hover:bg-slate-600">
+            Refresh All
+        </button>
+    </div>
+
+    <!-- ================= TABLE ================= -->
+    <div class="bg-slate-800 rounded-xl overflow-hidden shadow-lg">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-700">
+            <tr>
+                <th class="p-2 text-left">ID</th>
+                <th class="p-2 text-left">Pair</th>
+                <th class="p-2 text-left">Strategy</th>
+                <th class="p-2 text-left">Status</th>
+                <th class="p-2 text-left">RR</th>
+                <th class="p-2 text-left">Created</th>
+                <th class="p-2 text-left">Action</th>
+            </tr>
+            </thead>
+            <tbody id="tradeTable"></tbody>
+        </table>
+    </div>
+
+</div>
+
+<script>
+    const input = (id) => document.getElementById(id);
+
+    let winrateChartInstance = null;
+    let ruleChartInstance = null;
+
+    function buildTrade() {
+        return {
+            pair: input("pair").value,
+            strategy: input("strategy").value,
+            status: input("status").value,
+            rr: parseFloat(input("rr").value || "0"),
+
+            pdhTaken: pdhTaken.checked,
+            pdlTaken: pdlTaken.checked,
+
+            weeklyBullish: weeklyBullish.checked,
+            dailyBullish: dailyBullish.checked,
+            h4Bullish: h4Bullish.checked,
+
+            dailyImbalanceUp: dailyImbalanceUp.checked,
+            dailyOFUp: dailyOFUp.checked,
+
+            h4ImbalanceUp: h4ImbalanceUp.checked,
+            h4OFUp: h4OFUp.checked,
+
+            h4LiquidityStep1: h4LiquidityStep1.checked,
+            h4LiquidityStep2: h4LiquidityStep2.checked,
+            m15Bos: m15Bos.checked,
+
+            nextDayModel: nextDayModel.checked,
+            asiaOFAgainst: asiaOFAgainst.checked,
+            imbalanceAgainst: imbalanceAgainst.checked
+        };
+    }
+
+    function showMsg(type, html) {
+        const cls = type === "ok" ? "text-emerald-400" : "text-red-400";
+        input("result").innerHTML = `<div class="${cls}">${html}</div>`;
+    }
+
+    async function validateTrade() {
+        const res = await fetch("/trades/validate", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(buildTrade())
+        });
+        const d = await res.json();
+
+        if (d.allowed) {
+            showMsg("ok", "✅ ALLOWED");
+            input("openBtn").disabled = false;
+        } else {
+            showMsg("bad", "❌ " + d.reasons.join("<br>"));
+            input("openBtn").disabled = true;
+        }
+    }
+
+    async function openTrade() {
+        try {
+            const res = await fetch("/trades", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(buildTrade())
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                showMsg("bad", `❌ ${err.code}: ${err.message}`);
+                input("openBtn").disabled = true;
+                await loadStats();
+                return;
+            }
+
+            showMsg("ok", "✅ TRADE SAVED");
+            input("openBtn").disabled = true;
+            await loadTrades();
+            await loadStats();
+
+        } catch (e) {
+            showMsg("bad", "❌ Network error");
+        }
+    }
+
+    async function loadTrades() {
+        const s = input("filterStrategy").value;
+        const st = input("filterStatus").value;
+
+        // простой фильтр: если оба выбраны — берём приоритет status
+        // (потом сделаем комбинированный фильтр через Querydsl/Specifications)
+        let url = "/trades";
+        if (s) url = `/trades/filter?strategy=${encodeURIComponent(s)}`;
+        if (st) url = `/trades/filter?status=${encodeURIComponent(st)}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        const tbody = input("tradeTable");
+        tbody.innerHTML = "";
+
+        data.forEach(t => {
+            tbody.innerHTML += `
+        <tr class="border-b border-slate-700 hover:bg-slate-700/40">
+          <td class="p-2">${t.id ?? ""}</td>
+          <td class="p-2">${t.pair ?? ""}</td>
+          <td class="p-2">${t.strategy ?? ""}</td>
+          <td class="p-2">${t.status ?? ""}</td>
+          <td class="p-2">${t.rr ?? 0}</td>
+          <td class="p-2">${t.createdAt ?? ""}</td>
+          <td class="p-2">
+        <div class="flex gap-2">
+          <select id="statusSelect-${t.id}" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm">
+            <option value="OPEN" ${String(t.status).toUpperCase() === "OPEN" ? "selected" : ""}>OPEN</option>
+            <option value="TP" ${String(t.status).toUpperCase() === "TP" ? "selected" : ""}>TP</option>
+            <option value="SL" ${String(t.status).toUpperCase() === "SL" ? "selected" : ""}>SL</option>
+            <option value="BE" ${String(t.status).toUpperCase() === "BE" ? "selected" : ""}>BE</option>
+          </select>
+
+          <button onclick="updateStatus(${t.id})"
+                  class="px-3 py-1 bg-sky-600 rounded text-sm font-semibold hover:bg-sky-500">
+            Update
+          </button>
+        </div>
+      </td>
+        </tr>`;
+        });
+    }
+
+    async function loadStats() {
+        await loadWinrateChart();
+        await loadRuleChart();
+    }
+
+    async function loadWinrateChart() {
+        const res = await fetch("/stats/winrate/by-strategy");
+        const items = await res.json(); // [{strategy,tp,totalClosed,winrate}]
+
+        const labels = items.map(x => `${x.strategy} (${x.tp}/${x.totalClosed})`);
+        const values = items.map(x => x.winrate);
+
+        const ctx = document.getElementById("winrateChart");
+
+        if (winrateChartInstance) winrateChartInstance.destroy();
+
+        winrateChartInstance = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "Winrate (%)",
+                    data: values
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {display: true}
+                },
+                scales: {
+                    y: {beginAtZero: true, max: 100}
+                }
+            }
+        });
+    }
+
+    async function updateStatus(id) {
+        const sel = document.getElementById(`statusSelect-${id}`);
+        const newStatus = sel.value;
+
+        const res = await fetch(`/trades/${id}/status`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({status: newStatus})
+        });
+
+        if (!res.ok) {
+            showMsg("bad", "❌ Could not update status");
+            return;
+        }
+
+        showMsg("ok", `✅ Status updated to ${newStatus}`);
+        await loadTrades();
+        await loadStats();
+    }
+
+
+    async function loadRuleChart() {
+        const res = await fetch("/stats/blocked/by-rule");
+        const items = await res.json(); // [{label,count}]
+
+        const labels = items.map(x => x.label);
+        const values = items.map(x => x.count);
+
+        const ctx = document.getElementById("ruleChart");
+
+        if (ruleChartInstance) ruleChartInstance.destroy();
+
+        ruleChartInstance = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "Blocked count",
+                    data: values
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {legend: {display: true}},
+                scales: {
+                    y: {beginAtZero: true}
+                }
+            }
+        });
+    }
+
+    // init
+    loadTrades();
+    loadStats();
+</script>
+
+<style>
+    .input {
+        background: #020617;
+        padding: 8px;
+        border-radius: 10px;
+        width: 100%;
+        color: white;
+        border: 1px solid #334155;
+    }
+
+    .card {
+        background: rgba(2, 6, 23, 0.6);
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 12px;
+    }
+</style>
+
+</body>
+</html>

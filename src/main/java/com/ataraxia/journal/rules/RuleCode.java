@@ -1,0 +1,12 @@
+package com.ataraxia.journal.rules;
+
+public enum RuleCode {
+    DAILY_LIQUIDITY_TAKEN,
+    HTF_NOT_ALIGNED,
+    NO_DAILY_CONFIRMATION,
+    H4_NOT_CONFIRMING_DAILY,
+    OF_NOT_CONFIRMED,
+    NOT_NEXT_DAY_MODEL,
+    ASIA_OF_AGAINST,
+    IMBALANCE_AGAINST
+}
